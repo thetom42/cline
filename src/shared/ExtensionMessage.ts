@@ -15,6 +15,7 @@ export interface ExtensionMessage {
 		| "invoke"
 		| "partialMessage"
 		| "openRouterModels"
+		| "taskHistoryUpdate"
 	text?: string
 	action?: "chatButtonClicked" | "settingsButtonClicked" | "historyButtonClicked" | "didBecomeVisible"
 	invoke?: "sendMessage" | "primaryButtonClick" | "secondaryButtonClick"
@@ -24,6 +25,7 @@ export interface ExtensionMessage {
 	filePaths?: string[]
 	partialMessage?: ClineMessage
 	openRouterModels?: Record<string, ModelInfo>
+	taskHistory?: HistoryItem[]
 }
 
 export interface ExtensionState {
@@ -33,7 +35,6 @@ export interface ExtensionState {
 	alwaysAllowReadOnly?: boolean
 	uriScheme?: string
 	clineMessages: ClineMessage[]
-	taskHistory: HistoryItem[]
 	shouldShowAnnouncement: boolean
 }
 

@@ -733,35 +733,56 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await fs.rmdir(taskDirPath) // succeeds if the dir is empty
 	}
 
-	async deleteTaskFromState(id: string) {
-		// Remove the task from history
-		const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
-		const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
-		await this.updateGlobalState("taskHistory", updatedTaskHistory)
+    async deleteTaskFromState(id: string) {
+        // Remove the task from history
+        const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
+        const updatedTaskHistory = taskHistory.filter((task) => task.id !== id)
+        await this.updateGlobalState("taskHistory", updatedTaskHistory)
 
-		// Notify the webview that the task has been deleted
-		await this.postStateToWebview()
-	}
+        // Send updated task history to webview
+        const sortedTaskHistory = updatedTaskHistory
+            .filter((item) => item.ts && item.task)
+            .sort((a, b) => b.ts - a.ts)
+        await this.postMessageToWebview({ 
+            type: "taskHistoryUpdate", 
+            taskHistory: sortedTaskHistory 
+        })
+    }
 
-	async postStateToWebview() {
-		const state = await this.getStateToPostToWebview()
-		this.postMessageToWebview({ type: "state", state })
-	}
+   async postStateToWebview() {
+        const state = await this.getStateToPostToWebview()
+        // Send main state without task history
+        await this.postMessageToWebview({ type: "state", state })
+        
+        // Send task history separately
+        const taskHistory = ((await this.getGlobalState("taskHistory")) as HistoryItem[] | undefined) || []
+        const sortedTaskHistory = taskHistory
+            .filter((item) => item.ts && item.task)
+            .sort((a, b) => b.ts - a.ts)
+        await this.postMessageToWebview({ 
+            type: "taskHistoryUpdate", 
+            taskHistory: sortedTaskHistory 
+        })
+    }
 
-	async getStateToPostToWebview() {
-		const { apiConfiguration, lastShownAnnouncementId, customInstructions, alwaysAllowReadOnly, taskHistory } =
-			await this.getState()
-		return {
-			version: this.context.extension?.packageJSON?.version ?? "",
-			apiConfiguration,
-			customInstructions,
-			alwaysAllowReadOnly,
-			uriScheme: vscode.env.uriScheme,
-			clineMessages: this.cline?.clineMessages || [],
-			taskHistory: (taskHistory || []).filter((item) => item.ts && item.task).sort((a, b) => b.ts - a.ts),
-			shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
-		}
-	}
+    async getStateToPostToWebview() {
+        const { 
+            apiConfiguration, 
+            lastShownAnnouncementId, 
+            customInstructions, 
+            alwaysAllowReadOnly 
+        } = await this.getState()
+        
+        return {
+            version: this.context.extension?.packageJSON?.version ?? "",
+            apiConfiguration,
+            customInstructions,
+            alwaysAllowReadOnly,
+            uriScheme: vscode.env.uriScheme,
+            clineMessages: this.cline?.clineMessages || [],
+            shouldShowAnnouncement: lastShownAnnouncementId !== this.latestAnnouncementId,
+        }
+    }
 
 	async clearTask() {
 		this.cline?.abortTask()
@@ -914,17 +935,27 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
-		const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[]) || []
-		const existingItemIndex = history.findIndex((h) => h.id === item.id)
-		if (existingItemIndex !== -1) {
-			history[existingItemIndex] = item
-		} else {
-			history.push(item)
-		}
-		await this.updateGlobalState("taskHistory", history)
-		return history
-	}
+    async updateTaskHistory(item: HistoryItem): Promise<HistoryItem[]> {
+        const history = ((await this.getGlobalState("taskHistory")) as HistoryItem[]) || []
+        const existingItemIndex = history.findIndex((h) => h.id === item.id)
+        if (existingItemIndex !== -1) {
+            history[existingItemIndex] = item
+        } else {
+            history.push(item)
+        }
+        await this.updateGlobalState("taskHistory", history)
+        
+        // Send updated task history to webview
+        const sortedTaskHistory = history
+            .filter((item) => item.ts && item.task)
+            .sort((a, b) => b.ts - a.ts)
+        await this.postMessageToWebview({ 
+            type: "taskHistoryUpdate", 
+            taskHistory: sortedTaskHistory 
+        })
+        
+        return history
+    }
 
 	// global
 

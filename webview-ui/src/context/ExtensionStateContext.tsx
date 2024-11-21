@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react"
+import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react"
 import { useEvent } from "react-use"
 import { ExtensionMessage, ExtensionState } from "../../../src/shared/ExtensionMessage"
 import {
@@ -10,13 +10,16 @@ import {
 import { vscode } from "../utils/vscode"
 import { convertTextMateToHljs } from "../utils/textMateToHljs"
 import { findLastIndex } from "../../../src/shared/array"
+import { HistoryItem } from "../../../src/shared/HistoryItem"
+import { ClineMessage } from "../../../src/shared/ExtensionMessage"
 
-interface ExtensionStateContextType extends ExtensionState {
+interface ExtensionStateContextType extends Omit<ExtensionState, 'taskHistory'> {
 	didHydrateState: boolean
 	showWelcome: boolean
 	theme: any
 	openRouterModels: Record<string, ModelInfo>
 	filePaths: string[]
+	taskHistory: HistoryItem[]
 	setApiConfiguration: (config: ApiConfiguration) => void
 	setCustomInstructions: (value?: string) => void
 	setAlwaysAllowReadOnly: (value: boolean) => void
@@ -25,13 +28,13 @@ interface ExtensionStateContextType extends ExtensionState {
 
 const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
 
-export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const [state, setState] = useState<ExtensionState>({
+export const ExtensionStateContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+	const [state, setState] = useState<Omit<ExtensionState, 'taskHistory'>>({
 		version: "",
 		clineMessages: [],
-		taskHistory: [],
 		shouldShowAnnouncement: false,
 	})
+	const [taskHistory, setTaskHistory] = useState<HistoryItem[]>([])
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
 	const [theme, setTheme] = useState<any>(undefined)
@@ -62,6 +65,12 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 				setDidHydrateState(true)
 				break
 			}
+			case "taskHistoryUpdate": {
+				if (message.taskHistory) {
+					setTaskHistory(message.taskHistory)
+				}
+				break
+			}
 			case "theme": {
 				if (message.text) {
 					setTheme(convertTextMateToHljs(JSON.parse(message.text)))
@@ -74,9 +83,9 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 			}
 			case "partialMessage": {
 				const partialMessage = message.partialMessage!
-				setState((prevState) => {
+				setState((prevState: Omit<ExtensionState, 'taskHistory'>) => {
 					// worth noting it will never be possible for a more up-to-date message to be sent here or in normal messages post since the presentAssistantContent function uses lock
-					const lastIndex = findLastIndex(prevState.clineMessages, (msg) => msg.ts === partialMessage.ts)
+					const lastIndex = findLastIndex(prevState.clineMessages, (msg: ClineMessage) => msg.ts === partialMessage.ts)
 					if (lastIndex !== -1) {
 						const newClineMessages = [...prevState.clineMessages]
 						newClineMessages[lastIndex] = partialMessage
@@ -110,10 +119,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		theme,
 		openRouterModels,
 		filePaths,
-		setApiConfiguration: (value) => setState((prevState) => ({ ...prevState, apiConfiguration: value })),
-		setCustomInstructions: (value) => setState((prevState) => ({ ...prevState, customInstructions: value })),
-		setAlwaysAllowReadOnly: (value) => setState((prevState) => ({ ...prevState, alwaysAllowReadOnly: value })),
-		setShowAnnouncement: (value) => setState((prevState) => ({ ...prevState, shouldShowAnnouncement: value })),
+		taskHistory,
+		setApiConfiguration: (value: ApiConfiguration) => setState((prevState) => ({ ...prevState, apiConfiguration: value })),
+		setCustomInstructions: (value?: string) => setState((prevState) => ({ ...prevState, customInstructions: value })),
+		setAlwaysAllowReadOnly: (value: boolean) => setState((prevState) => ({ ...prevState, alwaysAllowReadOnly: value })),
+		setShowAnnouncement: (value: boolean) => setState((prevState) => ({ ...prevState, shouldShowAnnouncement: value })),
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
